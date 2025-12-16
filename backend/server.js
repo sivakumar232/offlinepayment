@@ -8,7 +8,7 @@
     const bankRoutes = require('./routes/bank.routes'); 
     const walletRoutes = require('./routes/wallets.routes'); // To be added later
     const deviceRoutes = require('./routes/devices.routes'); // To be added later
-
+    const syncRoutes = require('./routes/sync.routes');
 
     let globalCounters = {
         user_id: 1000,   // U1001, U1002, ...
@@ -37,7 +37,7 @@
         app.use('/api', bankRoutes(context)); 
         app.use('/api', walletRoutes(context)); 
         app.use('/api', deviceRoutes(context));
-
+        app.use('/api', syncRoutes(context));
         // 3. Start Listening
         app.listen(PORT, () => {
             console.log(`✅ Stage 0 Server listening on port ${PORT}`);

@@ -64,7 +64,8 @@ module.exports = (context) => {
         
         // --- 10. Hash & Signature Verification ---
         // 10a. Check payload integrity
-        const calculatedHash = calculateTransactionHash(tx); 
+        const calculatedHash = calculateTransactionHash(tx);
+        console.log('Calculated Hash for TXN-ZORO-1:', calculatedHash); 
         if (calculatedHash !== tx.tx_hash) {
             throw new Error(`Hash mismatch: Data corruption detected for ${tx.tx_id}.`);
         }
@@ -83,6 +84,7 @@ module.exports = (context) => {
         if (tx.counter !== expectedCounter) {
             throw new Error(`Counter mismatch. Expected ${expectedCounter}, got ${tx.counter}. Sequence broken.`);
         }
+        console.log('Expected Initial Seed Hash:', expectedPrevHash);
         if (tx.prev_hash !== expectedPrevHash) {
              throw new Error('Hash chain broken. Previous hash does not match last ledger entry.');
         }
@@ -97,7 +99,7 @@ module.exports = (context) => {
             amount: tx.amount,
             currency: tx.currency || 'INR', 
             counter: tx.counter,
-            timestamp: tx.timestamp,
+            timestamp: new Date(tx.ts_string).getTime(),   
             prev_hash: tx.prev_hash,
             tx_hash: tx.tx_hash,
             signature: tx.signature,
