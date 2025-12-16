@@ -1,0 +1,216 @@
+phase 1: setup
+Phase 2: Stage 0 Setup APIs Testing Guide (Plain Text)
+Server Status: Assumed running at http://localhost:3000
+
+1. 🧍 User Creation
+This step creates the identity (user_id).
+
+Detail	Value
+Method	POST
+Endpoint	http://localhost:3000/api/users
+Headers	Content-Type: application/json
+
+Export to Sheets
+
+Body (JSON)
+
+JSON
+
+{
+    "name": "Roronoa Zoro",
+    "phone": "9876543210"
+}
+Expected Response
+
+Status Code: 201 Created
+
+Action: SAVE the user_id (e.g., USER1) for the next step.
+
+JSON
+
+{
+    "user_id": "USER1",
+    "name": "Roronoa Zoro",
+    "message": "User created successfully."
+}
+2. 🏦 Bank Account Creation
+This step establishes the money (account_id and balance). Requires user_id from Step 1.
+
+Detail	Value
+Method	POST
+Endpoint	http://localhost:3000/api/bank/accounts
+Headers	Content-Type: application/json
+
+Export to Sheets
+
+Body (JSON)
+
+JSON
+
+{
+    "user_id": "USER1",
+    "initial_balance": 50000.00
+}
+Expected Response
+
+Status Code: 201 Created
+
+Action: SAVE the account_id (e.g., ACC1) for the next step.
+
+JSON
+
+{
+    "account_id": "ACC1",
+    "user_id": "USER1",
+    "balance": 50000,
+    "message": "Bank account created and initialized successfully."
+}
+3. 💳 Wallet Creation & Linking
+This step establishes spending permission (wallet_id). Requires user_id and account_id.
+
+Detail	Value
+Method	POST
+Endpoint	http://localhost:3000/api/wallets
+Headers	Content-Type: application/json
+
+Export to Sheets
+
+Body (JSON)
+
+JSON
+
+{
+    "user_id": "USER1",
+    "account_id": "ACC1",
+    "public_key": "MOCK_PK_ZORO_987654",
+    "device_id": "DEV-ZORO-SWORD"
+}
+Expected Response
+
+Status Code: 201 Created
+
+Action: SAVE the wallet_id (e.g., WALLET1).
+
+JSON
+
+{
+    "wallet_id": "WALLET1",
+    "offline_limit": 500,
+    "message": "Wallet created and linked successfully."
+}
+4. 📱 Device Registration
+This step finalizes the Root of Trust. Requires wallet_id, device_id, and public_key.
+
+Detail	Value
+Method	POST
+Endpoint	http://localhost:3000/api/devices/register
+Headers	Content-Type: application/json
+
+Export to Sheets
+
+Body (JSON)
+
+JSON
+
+{
+    "wallet_id": "WALLET1",
+    "device_id": "DEV-ZORO-SWORD",
+    "public_key": "MOCK_PK_ZORO_987654"
+}
+Expected Response
+
+Status Code: 201 Created
+
+Action: CONFIRM the final setup is complete.
+
+JSON
+
+{
+    "message": "Device registered successfully. Stage 0 complete."
+}
+Next Phase: Phase 3 (The Sync API) Test Status
+Detail	Value
+Method	POST
+Endpoint	http://localhost:3000/api/sync
+Current Status	400 Bad Request
+Reason	The route and controller are stubbed, but the core security/validation logic is not yet written in Sync.service.js.
+
+{
+    "user_id": "U1001",
+    "account_id": "ACC9001",
+    "public_key": "MOCK_PK_ZORO_987654",
+    "device_id": "DEV-ZORO-SWORD"
+}
+{
+    "wallet_id": "WALLET101",
+    "offline_limit": 500,
+    "message": "Wallet created and linked successfully."
+}
+
+art 1: Establish the Root of Trust (Phase 2)We create the Sender (WALLET1) and the Receiver (WALLET2).StepMethodEndpointPurposeBody (JSON)IDs to SAVE1. Sender UserPOST/api/usersCreate USER1 (Zoro){"name": "Roronoa Zoro", "phone_number": "9876543210"}USER12. Sender BankPOST/api/bank/accountsCreate ACC1 (Start: 50k){"user_id": "USER1", "initial_balance": 50000.00}ACC13. Sender WalletPOST/api/walletsLink USER1 to ACC1{"user_id": "USER1", "account_id": "ACC1", "public_key": "PK_ZORO_SENDER_1", "device_id": "DEV-ZORO-SWORD"}WALLET14. Sender DevicePOST/api/devices/registerRegister trusted device{"wallet_id": "WALLET1", "device_id": "DEV-ZORO-SWORD", "public_key": "PK_ZORO_SENDER_1"}(Success 201)5. Receiver UserPOST/api/usersCreate USER2 (Nami){"name": "Nami", "phone_number": "5551234567"}USER26. Receiver BankPOST/api/bank/accountsCreate ACC2 (Start: 1k){"user_id": "USER2", "initial_balance": 1000.00}ACC27. Receiver WalletPOST/api/walletsLink USER2 to ACC2{"user_id": "USER2", "account_id": "ACC2", "public_key": "PK_NAMI_RECEIVER_2", "device_id": "DEV-NAMI-MAP"}WALLET28. Receiver DevicePOST/api/devices/registerRegister trusted device{"wallet_id": "WALLET2", "device_id": "DEV-NAMI-MAP", "public_key": "PK_NAMI_RECEIVER_2"}(Success 201)Part 2: Test the Core Sync Logic (Phase 3)This is where the magic happens. We will run three scenarios to test the validation pipeline.Test 9: Successful Sync (Passing All Checks)This transaction is the first transaction for WALLET1. It must adhere to all security rules.DetailValueEndpointPOST http://localhost:3000/api/syncGoalPass Signature, Hash Chain, and Idempotency checks.Request Body (JSON)Counter: 1Previous Hash: 27b3b7549887754a670402157d620ff36b27e6a7183e201b1626012674208a1e (Hash of 'INITIAL_LEDGER_SEED')Signature: MOCK_SIGNATURE_VALID (To pass the mock check in crypto.js)JSON{
+    "transactions": [
+        {
+            "tx_id": "TX-A-0001",
+            "from_wallet": "WALLET1", 
+            "to_wallet": "WALLET2", 
+            "device_id": "DEV-ZORO-SWORD", 
+            "amount": 50.00,
+            "currency": "INR",
+            "timestamp": "2025-12-16T10:00:00Z",
+            "counter": 1,
+            "prev_hash": "27b3b7549887754a670402157d620ff36b27e6a7183e201b1626012674208a1e", 
+            "tx_hash": "MOCK_HASH_TO_BE_REPLACED_BY_SERVICE_CHECK", 
+            "signature": "MOCK_SIGNATURE_VALID" 
+        }
+    ]
+}
+Expected Result: 200 OK, with status PENDING_SETTLEMENT. The transaction is now in the LedgerTransaction table.Test 10: Hash Chain Failure (Security Check)We attempt to submit the second transaction for WALLET1, but we intentionally break the sequence.DetailValueEndpointPOST http://localhost:3000/api/syncGoalFail the Hash Chain (Counter) check.Request Body (JSON)TX ID: Must be new (TX-A-0002)Counter: Incorrect (5, instead of the expected 2)JSON{
+    "transactions": [
+        {
+            "tx_id": "TX-A-0002",
+            "from_wallet": "WALLET1", 
+            "to_wallet": "WALLET2", 
+            "device_id": "DEV-ZORO-SWORD", 
+            "amount": 10.00,
+            "currency": "INR",
+            "timestamp": "2025-12-16T10:01:00Z",
+            "counter": 5, // ⬅️ EXPECTED TO FAIL (Should be 2)
+            "prev_hash": "...", 
+            "tx_hash": "...", 
+            "signature": "MOCK_SIGNATURE_VALID" 
+        }
+    ]
+}
+Expected Result: 200 OK, with results showing status REJECTED and the message: "Counter mismatch. Expected 2, got 5. Sequence broken."By successfully running these 10 tests, you confirm that Phase 2 (Setup) and the core Phase 3 (Validation) are fully operational!
+
+testing :
+creating user 1 
+route:post - http://localhost:3000/api/users
+body:{"name": "luffy", "phone": "9390029431"}
+return :{
+    "user_id": "U1001",
+    "message": "User created successfully"
+}
+creating bank of user 1
+route: post - http://localhost:3000/api/bank/accounts
+body:{"user_id": "U1001", "initial_balance": 50000.00}
+return :{
+    "account_id": "ACC9001",
+    "user_id": "U1001",
+    "account_number": "900000009001",
+    "balance": 50000,
+    "message": "Bank account created and initialized successfully."
+}
+create wallet of user 1
+route :post - http://localhost:3000/api/wallets
+body:{
+    "user_id": "U1001",
+    "account_id": "ACC9001",
+    "public_key": "MOCK_PK_ZORO_987654",
+    "device_id": "DEV-ZORO-SWORD"
+}
+return : {
+    "wallet_id": "WALLET101",
+    "offline_limit": 500,
+    "message": "Wallet created and linked successfully."
+}
