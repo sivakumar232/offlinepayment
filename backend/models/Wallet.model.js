@@ -16,25 +16,33 @@ const WalletSchema = new mongoose.Schema({
     account_id: {
         type: String,
         required: true,
-        unique: true, // Crucial: Wallet must link to exactly one bank account
+        unique: true,
     },
     public_key: {
         type: String,
-        required: true, // Signing key for transactions
+        required: true,
     },
     device_id: {
         type: String,
-        required: true, // Binding to a specific device
-        unique: true, // Crucial: One device_id per wallet for security
+        required: true,
+        unique: true,
     },
+    
+    // CRITICAL: FIELD TO HOLD THE ACCOUNT BALANCE
+    balance: { 
+        type: Number,
+        default: 0,
+        min: 0, 
+    },
+    
     offline_limit: {
         type: Number,
-        default: 500, // Max amount spendable without immediate sync
+        default: 500,
         min: 0,
     },
     current_counter: {
         type: Number,
-        default: 0, // Last accepted transaction sequence number
+        default: 0,
         min: 0,
     },
     status: {
@@ -45,6 +53,31 @@ const WalletSchema = new mongoose.Schema({
 }, {
     timestamps: { createdAt: 'created_at', updatedAt: false }
 });
+
+// CRITICAL FIX: ATOMIC BALANCE UPDATE METHOD
+WalletSchema.statics.updateBalance = async function (walletId, amountChange) {
+    if (amountChange === 0) {
+        return; 
+    }
+
+    // Use $inc for atomic update. This is vital for concurrency control.
+    // 
+    const updateResult = await this.findOneAndUpdate(
+        { wallet_id: walletId },
+        { 
+            $inc: { balance: amountChange } 
+        },
+        { 
+            new: true // Return the updated document
+        }
+    );
+
+    if (!updateResult) {
+        throw new Error(`Wallet not found for ID: ${walletId}. Balance update failed.`);
+    }
+    
+    return updateResult;
+};
 
 const Wallet = mongoose.model('Wallet', WalletSchema);
 

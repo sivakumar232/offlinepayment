@@ -80,7 +80,9 @@ module.exports = (context) => {
         
         const expectedCounter = (lastTx ? lastTx.counter : 0) + 1;
         const expectedPrevHash = (lastTx ? lastTx.tx_hash : createHash('INITIAL_LEDGER_SEED')); 
-
+        
+        console.log('Expected Counter:', expectedCounter);
+        console.log('Expected Previous Hash:', expectedPrevHash);
         if (tx.counter !== expectedCounter) {
             throw new Error(`Counter mismatch. Expected ${expectedCounter}, got ${tx.counter}. Sequence broken.`);
         }
