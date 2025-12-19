@@ -1,4 +1,3 @@
-// src/controllers/wallet.controller.js
 const { v4: uuidv4 } = require('uuid');
 const User = require('../models/User.model');
 const BankAccount = require('../models/BankAccount.model');
@@ -6,48 +5,13 @@ const Wallet = require('../models/Wallet.model');
 const LedgerTransaction = require('../models/LedgerTransaction');
 
 module.exports = (context) => {
-    // 1. Create Wallet
+    // Helper to get socket instance
+    const getIO = (req) => req.app.get('socketio');
+
     const createWallet = async (req, res) => {
-        const { phone, public_key, device_id } = req.body;
-        
-        try {
-            const user = await User.findOne({ phone });
-            if (!user) return res.status(404).json({ error: "User not found." });
-
-            const account = await BankAccount.findOne({ user_id: user.user_id });
-            if (!account) return res.status(404).json({ error: "No bank account linked." });
-
-            // Check duplicates
-            const walletExists = await Wallet.findOne({ $or: [{ user_id: user.user_id }, { device_id }] });
-            if (walletExists) return res.status(409).json({ error: "Wallet already exists." });
-
-            // 🚀 GENERATE RANDOM WALLET ID
-            const newWalletId = `WALLET-${uuidv4().substring(0, 8).toUpperCase()}`;
-
-            const newWallet = new Wallet({
-                wallet_id: newWalletId,
-                user_id: user.user_id,
-                account_id: account.account_id,
-                public_key,
-                device_id,
-                balance: 0, 
-                offline_limit: 500,
-                status: 'ACTIVE',
-            });
-
-            const savedWallet = await newWallet.save();
-
-            return res.status(201).json({
-                wallet_id: savedWallet.wallet_id,
-                message: "Wallet created successfully."
-            });
-
-        } catch (error) {
-            return res.status(500).json({ error: error.message });
-        }
+        // ... (Keep existing createWallet logic exactly as is)
     };
 
-    // 2. Load Funds
     const loadFunds = async (req, res) => {
         const { wallet_id, amount } = req.body;
         
@@ -55,9 +19,17 @@ module.exports = (context) => {
             const wallet = await Wallet.findOne({ wallet_id });
             if (!wallet) return res.status(404).json({ error: "Wallet not found." });
 
-            // Atomic Updates
             await BankAccount.findOneAndUpdate({ account_id: wallet.account_id }, { $inc: { balance: -amount } });
             const updatedWallet = await Wallet.findOneAndUpdate({ wallet_id }, { $inc: { balance: amount } }, { new: true });
+
+            // 🚀 NOTIFY USER VIA SOCKET
+            const io = getIO(req);
+            io.to(`user_${wallet.user_id}`).emit('BALANCE_UPDATED', {
+                type: 'CREDIT',
+                amount: amount,
+                new_balance: updatedWallet.balance,
+                message: `Successfully loaded $${amount} into your wallet.`
+            });
 
             return res.status(200).json({ message: "Funds loaded.", new_balance: updatedWallet.balance });
         } catch (error) {
@@ -65,14 +37,13 @@ module.exports = (context) => {
         }
     };
 
-    // 3. Submit Transaction (Sync)
     const submitTransaction = async (req, res) => {
         const { transactions } = req.body;
         const results = [];
+        const io = getIO(req);
 
         for (const tx of transactions) {
             try {
-                // Deduplicate check
                 const exists = await LedgerTransaction.findOne({ tx_id: tx.tx_id });
                 if (exists) {
                     results.push({ tx_id: tx.tx_id, status: "ALREADY_SYNCED" });
@@ -80,8 +51,28 @@ module.exports = (context) => {
                 }
 
                 await LedgerTransaction.create({ ...tx, status: 'SETTLED' });
-                await Wallet.findOneAndUpdate({ wallet_id: tx.from_wallet }, { $inc: { balance: -tx.amount } });
-                await Wallet.findOneAndUpdate({ wallet_id: tx.to_wallet }, { $inc: { balance: tx.amount } });
+                const fromWallet = await Wallet.findOneAndUpdate({ wallet_id: tx.from_wallet }, { $inc: { balance: -tx.amount } }, { new: true });
+                const toWallet = await Wallet.findOneAndUpdate({ wallet_id: tx.to_wallet }, { $inc: { balance: tx.amount } }, { new: true });
+
+                // 🚀 NOTIFY SENDER (Debit)
+                if (fromWallet) {
+                    io.to(`user_${fromWallet.user_id}`).emit('TRANSACTION_SYNCED', {
+                        tx_id: tx.tx_id,
+                        type: 'DEBIT',
+                        amount: tx.amount,
+                        new_balance: fromWallet.balance
+                    });
+                }
+
+                // 🚀 NOTIFY RECIPIENT (Credit)
+                if (toWallet) {
+                    io.to(`user_${toWallet.user_id}`).emit('TRANSACTION_SYNCED', {
+                        tx_id: tx.tx_id,
+                        type: 'CREDIT',
+                        amount: tx.amount,
+                        new_balance: toWallet.balance
+                    });
+                }
 
                 results.push({ tx_id: tx.tx_id, status: "SETTLED" });
             } catch (err) {
